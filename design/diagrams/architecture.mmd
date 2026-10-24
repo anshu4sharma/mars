@@ -1,0 +1,39 @@
+flowchart LR
+  %% ---------- Layer 1: channels
+  subgraph CH["Channels (external)"]
+    direction TB
+    W["Website"]:::ch
+    N["Nykaa"]:::ch
+    F["Flipkart"]:::ch
+    B["Blinkit"]:::ch
+  end
+  %% ---------- Layer 2: edge + write path
+  API["API (Fargate)<br/>HMAC verify<br/>store raw event<br/>ops REST"]:::aws
+  R[("Redis Streams<br/>inbox<br/>consumer group")]:::red
+  WK["Worker (Fargate)<br/><b>ONLY writer of stock</b><br/>reserve · release · ledger"]:::aws
+  PG[("PostgreSQL RDS Multi-AZ<br/>orders · inventory_ledger<br/>stock_levels · outbox<br/><b>SOURCE OF TRUTH</b>")]:::db
+  %% ---------- Layer 3: fan-out
+  CB[("Redis<br/>dirty sets<br/>rate tokens")]:::red
+  PU["Pusher<br/>per-channel token buckets<br/>urgent + bulk lanes"]:::aws
+  RL["Outbox Relay<br/>backoff · reconcile"]:::aws
+  E["Business Central<br/>(ERP)<br/>down 1–2h Sundays"]:::erp
+  OPS["Ops screen<br/>failed syncs · retry"]:::aws
+
+  W & N & B -->|"signed webhook"| API
+  F -.->|"poll 2 min"| API
+  API ==>|"XADD"| R
+  R ==>|"claim + reserve"| WK
+  WK ==>|"1 txn: ledger + stock<br/>+ outbox"| PG
+  WK -->|"SADD dirty"| CB
+  CB -->|"dirty SKUs + tokens"| PU
+  PG -->|"outbox rows"| RL
+  RL ==>|"idempotent order"| E
+  PU ==>|"set stock = N"| CH
+  PU -->|"ack"| PG
+  WK -->|"failures"| OPS
+
+  classDef ch fill:#fde8ee,stroke:#d6336c,color:#222
+  classDef aws fill:#e7f0ff,stroke:#3b6fd4,color:#222
+  classDef red fill:#ffe8e0,stroke:#d9480f,color:#222
+  classDef db fill:#e6f4ea,stroke:#2f9e44,color:#222
+  classDef erp fill:#f3e8ff,stroke:#7048e8,color:#222

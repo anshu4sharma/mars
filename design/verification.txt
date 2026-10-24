@@ -1,0 +1,10 @@
+PASS  two concurrent orders for the last unit: exactly one wins
+PASS  ledger has exactly one reservation row
+PASS  available is 0, never negative
+PASS  duplicate webhook x10 reserves once
+PASS  concurrent redelivery x25 reserves once
+PASS  200 concurrent orders vs 50 units: exactly 50 succeed
+PASS  stock invariant holds under load
+PASS  multi-item cart fails atomically (no partial reservation)
+
+All checks passed.

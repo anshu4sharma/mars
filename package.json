@@ -1,0 +1,13 @@
+{
+  "name": "mars-order-inventory-sync-design",
+  "private": true,
+  "type": "module",
+  "description": "Design deliverable: reservation concurrency checked against real PostgreSQL.",
+  "scripts": {
+    "test": "node design/test/reservation_race.test.mjs",
+    "pg": "docker run -d --rm --name mars-pg -e POSTGRES_PASSWORD=dev -p 55432:5432 postgres:16-alpine"
+  },
+  "devDependencies": {
+    "pg": "^8.13.0"
+  }
+}
