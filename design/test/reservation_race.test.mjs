@@ -1,12 +1,9 @@
-// reservation_race.test.mjs — runs the real DESIGN.md §4 reservation SQL against
+// reservation_race.test.mjs — runs the DESIGN.md reservation SQL against
 // a real PostgreSQL to prove the central claim: when two channels sell the last
 // unit in the same second, exactly one order wins and exactly one ledger row exists.
 //
-// Usage:
-//   docker run -d --rm --name mars-pg -e POSTGRES_PASSWORD=dev -p 55432:5432 postgres:16-alpine
-//   node design/test/reservation_race.test.mjs
-//
-// Env: PGHOST (127.0.0.1), PGPORT (55432), PGUSER (postgres), PGPASSWORD (dev), PGDATABASE (postgres)
+// Run: docker run -d --rm --name mars-pg -e POSTGRES_PASSWORD=dev -p 55432:5432 postgres:16-alpine
+//      npm i pg && PGPORT=55432 PGPASSWORD=dev node design/test/reservation_race.test.mjs
 
 import { Client } from 'pg';
 import { readFileSync } from 'node:fs';

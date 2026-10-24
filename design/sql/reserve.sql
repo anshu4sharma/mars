@@ -1,4 +1,4 @@
--- reserve.sql — the reservation statement from DESIGN.md §4, verbatim.
+-- reserve.sql — the reservation statement from DESIGN.md, verbatim.
 -- Parameters: $1 order_id, $2 sku, $3 qty
 --
 -- Execute once per order item, inside ONE transaction for the whole order, with
