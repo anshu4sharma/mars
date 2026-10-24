@@ -16,7 +16,7 @@ Mars Cosmetics · NestJS · PostgreSQL · Redis · AWS
 `outbox(order_id, payload, idempotency_key, status, attempts, next_attempt_at)` — `UNIQUE(idempotency_key)`.
 `failed_syncs(kind, ref, error_class, attempts, state)` — backs the ops screen.
 
-**Duplicates.** Three unique constraints, each for a different failure. `(channel, external_order_id)` on `orders` stops the same order arriving twice (webhook *and* poll). `idempotency_key = "{reason}:{order_id}:{sku}"` on the ledger stops a stock movement applying twice if an order is reprocessed — the one that matters, since the ledger insert, not the order row, is what gates the counter update.
+**Duplicates.** `(channel, external_order_id)` on `orders` stops the same order arriving twice (webhook *and* poll). `idempotency_key = "{reason}:{order_id}:{sku}"` on the ledger stops a stock movement applying twice if an order is reprocessed — the one that matters, since the ledger insert, not the order row, is what gates the counter update.
 
 ---
 
@@ -54,7 +54,7 @@ UPDATE stock_levels
 RETURNING sku, (on_hand - reserved) AS available_after;
 ```
 
-The `UPDATE` takes the row lock and re-checks the predicate against the current row. One order wins; the other blocks for microseconds and finds nothing. `CHECK(on_hand >= reserved)` is a second net. This is where overselling is prevented — not in Redis, not by a retry.
+The `UPDATE` is atomic: it takes the row lock, re-checks the predicate against the locked row, and returns nothing if stock ran out. One order wins; the other blocks for microseconds and fails. `CHECK(on_hand >= reserved)` is a second net. This is where overselling is prevented — not in Redis, not by a retry.
 
 The loser goes to an allocation lane: on the website we fail or refund at checkout, since we control that experience; on a marketplace we cancel, notify the channel, and count it against the 0.5% SLO.
 
@@ -66,7 +66,7 @@ The other half of the problem is that **the channel's mirror is stale, and no lo
 
 Nykaa at 5 req/s is 300 calls/min, so a full 1,200-SKU sweep takes 240s. Full refresh inside 60s is impossible there. What we commit to: **every SKU whose stock changed is pushed within 60s**, plus a full sweep every 5 minutes. Flipkart's whole catalog is 24 calls at 9 req/s, so it is never the bottleneck.
 
-Every commit adds the SKU to a dirty set. The pusher sends **absolute values** (`set to N`, never `-1`) so retries are harmless, urgent (low-stock) SKUs first, through per-channel token buckets at 90% of the documented limit. The safety-net sweep is driven by `updated_at` in Postgres, not by Redis, so a Redis restart costs us nothing but time. 429s and timeouts back off per channel, never globally.
+Every commit adds the SKU to a dirty set. The pusher sends **absolute values** (`set to N`, never `-1`) so retries are harmless, urgent (low-stock) SKUs first, through per-channel token buckets at 90% of the documented limit. The safety-net sweep is driven by `updated_at` in Postgres, not by Redis, so a Redis restart costs us nothing but time. 429s and timeouts back off per channel.
 
 ---
 
@@ -74,7 +74,7 @@ Every commit adds the SKU to a dirty set. The pusher sends **absolute values** (
 
 | Failure | Handling |
 |---|---|
-| ERP down 1–2h Sundays | The `outbox` row commits with the reservation. The relay backs off and drains the backlog on recovery — ~36k rows from a two-hour peak, about 12 minutes to clear. Nothing is lost. |
+| ERP down 1–2h Sundays | The `outbox` row commits with the reservation. The relay backs off and drains the backlog on recovery — ~36k rows from a two-hour peak, about 12 minutes to clear. |
 | "Exactly once" to ERP | Not achievable across HTTP from our side alone. We do at-least-once with a deterministic payload, a stable key `erp:{channel}:{external_order_id}`, and a `GET` by `externalDocumentNo` before retrying a timeout. Needs BC to enforce uniqueness on that field — see assumptions. |
 | Blinkit timeouts (2%) | Retry with jitter next cycle. Pushes are idempotent. |
 | Flipkart 429 | Honour `Retry-After`, exponential backoff, never drop. |

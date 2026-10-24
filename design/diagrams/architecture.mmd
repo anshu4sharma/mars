@@ -1,5 +1,5 @@
 flowchart LR
-  %% ---------- Layer 1: channels
+  %% channels
   subgraph CH["Channels (external)"]
     direction TB
     W["Website"]:::ch
@@ -7,12 +7,12 @@ flowchart LR
     F["Flipkart"]:::ch
     B["Blinkit"]:::ch
   end
-  %% ---------- Layer 2: edge + write path
+  %% edge + write path
   API["API (Fargate)<br/>HMAC verify<br/>store raw event<br/>ops REST"]:::aws
   R[("Redis Streams<br/>inbox<br/>consumer group")]:::red
   WK["Worker (Fargate)<br/><b>ONLY writer of stock</b><br/>reserve · release · ledger"]:::aws
   PG[("PostgreSQL RDS Multi-AZ<br/>orders · inventory_ledger<br/>stock_levels · outbox<br/><b>SOURCE OF TRUTH</b>")]:::db
-  %% ---------- Layer 3: fan-out
+  %% fan-out
   CB[("Redis<br/>dirty sets<br/>rate tokens")]:::red
   PU["Pusher<br/>per-channel token buckets<br/>urgent + bulk lanes"]:::aws
   RL["Outbox Relay<br/>backoff · reconcile"]:::aws
