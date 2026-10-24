@@ -8,7 +8,7 @@
 --   * no stock   — on_hand - reserved < qty
 -- Both cases roll back the order and must NOT be retried blindly.
 --
--- Verified against PostgreSQL 16 in design/test/reservation_race.test.mjs.
+-- (Optional, as the brief allows: pseudo-code for the reservation step.)
 
 WITH ledger AS (
   INSERT INTO inventory_ledger

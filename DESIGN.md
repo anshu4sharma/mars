@@ -135,9 +135,3 @@ No new infrastructure: `warehouse_id` on existing tables and a zone map, on the 
 ## AI usage
 
 DeepSeek coding agent drafted the document text and rendered the Mermaid diagram. The reservation approach and the trade-offs are my design decisions, and I can defend any part of this on the call.
-
----
-
-## Verification
-
-`design/sql/reserve.sql` is the statement above; `design/test/reservation_race.test.mjs` runs it against PostgreSQL 16. Output in `design/verification.txt`: two channels selling the last unit produce exactly one winner and one ledger row, 200 concurrent orders against 50 units yield exactly 50 successes, and duplicate webhooks reserve once.
