@@ -2,6 +2,8 @@
 
 Mars Cosmetics · NestJS · PostgreSQL · Redis · AWS
 
+The API, worker, pusher, pollers and outbox relay run as separate ECS Fargate services, so a dead ERP or a throttled channel can't slow ingestion. Postgres is RDS Multi-AZ (the source of truth); Redis is ElastiCache and holds only streams, dirty sets and rate-limit tokens.
+
 ![Architecture](design/diagrams/architecture.png)
 
 ---
@@ -69,6 +71,8 @@ Nykaa at 5 req/s is 300 calls/min, so a full 1,200-SKU sweep takes 240s. Full re
 That 60s target holds at normal load. At sale peak — 300 orders/min, roughly 1.5 lines each, so ~450 SKU changes/min — Nykaa's 300 calls/min can no longer keep up, and the dirty set grows. Low-stock SKUs go first, and the buffer absorbs the lag, but the target slips for SKUs that are not near zero. The buffer is what stops that slip from turning into a cancellation.
 
 Every commit adds the SKU to a dirty set. The pusher sends **absolute values** (`set to N`, never `-1`) so retries are harmless, urgent (low-stock) SKUs first, through per-channel token buckets at 90% of the documented limit. The safety-net sweep is driven by `updated_at` in Postgres, not by Redis, so a Redis restart costs us nothing but time. 429s and timeouts back off per channel.
+
+Blinkit gets its daily CSV upload plus the REST API for anything urgent. Since its API drops 2% of calls, the CSV is the baseline and the API is only used for SKUs that move — we never rely on an API call landing to keep Blinkit accurate.
 
 ---
 

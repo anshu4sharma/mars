@@ -1,4 +1,4 @@
--- reserve.sql — the reservation statement from DESIGN.md, verbatim.
+-- Stock reservation — the statement from DESIGN.md.
 -- Parameters: $1 order_id, $2 sku, $3 qty
 --
 -- Execute once per order item, inside ONE transaction for the whole order, with
@@ -7,8 +7,6 @@
 --   * duplicate  — the idempotency key already exists (replay / duplicate webhook)
 --   * no stock   — on_hand - reserved < qty
 -- Both cases roll back the order and must NOT be retried blindly.
---
--- (Optional, as the brief allows: pseudo-code for the reservation step.)
 
 WITH ledger AS (
   INSERT INTO inventory_ledger
