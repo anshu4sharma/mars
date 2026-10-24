@@ -66,6 +66,8 @@ The other half of the problem is that **the channel's mirror is stale, and no lo
 
 Nykaa at 5 req/s is 300 calls/min, so a full 1,200-SKU sweep takes 240s. Full refresh inside 60s is impossible there. What we commit to: **every SKU whose stock changed is pushed within 60s**, plus a full sweep every 5 minutes. Flipkart's whole catalog is 24 calls at 9 req/s, so it is never the bottleneck.
 
+That 60s target holds at normal load. At sale peak — 300 orders/min, roughly 1.5 lines each, so ~450 SKU changes/min — Nykaa's 300 calls/min can no longer keep up, and the dirty set grows. Low-stock SKUs go first, and the buffer absorbs the lag, but the target slips for SKUs that are not near zero. The buffer is what stops that slip from turning into a cancellation.
+
 Every commit adds the SKU to a dirty set. The pusher sends **absolute values** (`set to N`, never `-1`) so retries are harmless, urgent (low-stock) SKUs first, through per-channel token buckets at 90% of the documented limit. The safety-net sweep is driven by `updated_at` in Postgres, not by Redis, so a Redis restart costs us nothing but time. 429s and timeouts back off per channel.
 
 ---
@@ -74,7 +76,7 @@ Every commit adds the SKU to a dirty set. The pusher sends **absolute values** (
 
 | Failure | Handling |
 |---|---|
-| ERP down 1–2h Sundays | The `outbox` row commits with the reservation. The relay backs off and drains the backlog on recovery — ~36k rows from a two-hour peak, about 12 minutes to clear. |
+| ERP down 1–2h Sundays | The `outbox` row commits with the reservation. The relay backs off and drains the backlog on recovery — about 700 rows on a normal Sunday, ~6–7k if the outage lands on a sale day, which clears in minutes at 10 orders/s. |
 | "Exactly once" to ERP | Not achievable across HTTP from our side alone. We do at-least-once with a deterministic payload, a stable key `erp:{channel}:{external_order_id}`, and a `GET` by `externalDocumentNo` before retrying a timeout. Needs BC to enforce uniqueness on that field — see assumptions. |
 | Blinkit timeouts (2%) | Retry with jitter next cycle. Pushes are idempotent. |
 | Flipkart 429 | Honour `Retry-After`, exponential backoff, never drop. |
@@ -108,6 +110,7 @@ Out of v1: multi-warehouse allocation (one warehouse is stated), refunds (ERP ow
 - **BC enforces uniqueness on `externalDocumentNo`** (or the ERP team de-dupes on their side). This is the one external dependency for "exactly once".
 - Cancel releases stock immediately (nothing shipped); a return goes to `in_transit` and becomes `on_hand` only when the warehouse scans it.
 - The 60s target means changed SKUs, not all 1,200 continuously.
+- The brief gives no order size, so the peak arithmetic assumes ~1.5 lines per order. More lines per order makes Nykaa's ceiling tighter.
 - Single region, Multi-AZ. Budget ~₹50k/month all-in; estimate ~₹35k (Fargate ₹10k, RDS `db.t4g.medium` Multi-AZ ₹15k, ElastiCache ₹2.5k, ALB + S3 + logs ₹5k).
 
 ---
